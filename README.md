@@ -1,8 +1,7 @@
-# AgileSprint.ai
 # AgileSprint.ai — Stateless Monte Carlo Sprint Risk & Velocity Predictor
 
 **Live Demo:** [https://agilesprint-ai.onrender.com/](https://agilesprint-ai.onrender.com/)
-
+![AgileSprint.ai Dashboard](screenshots/dashboard.png)
 AgileSprint.ai is a lightweight, zero-storage project operations tool that forecasts Agile sprint completion probabilities, detects delivery bottlenecks, and generates mitigation plans using a 5,000-iteration Monte Carlo simulation engine.
 
 ---
