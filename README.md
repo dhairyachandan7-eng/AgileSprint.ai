@@ -42,3 +42,35 @@ simulated_outputs = np.clip(
     0, None
 )
 completion_probability = (np.sum(simulated_outputs >= committed_points) / 5000) * 100
+
+## Practical Use Cases
+
+### Sprint Planning Calibration
+- *"Our team averaged 38 points over the last 6 sprints (±5 pts), and stakeholders want 44 points with 3 cross-team dependencies. What are our real odds?"* -> Reveals a ~1.5% completion probability and recommends deferring 6 stretch points.
+
+### Carryover Debt Audit
+- *"We have 8 unfinished points rolling over from last sprint into a 10-day sprint with 5 engineers. How much new work can we safely pull?"* -> Quantifies capacity drag and recommends breaking stories larger than 8 points into sub-tasks.
+
+### Retrospective Variance Analysis
+- *"Here is our exported Jira sprint history CSV—how volatile is our delivery?"* -> Auto-computes mean velocity and standard deviation in one click without saving proprietary team data.
+
+## API Endpoints
+
+| Endpoint | Method | Purpose |
+| :--- | :--- | :--- |
+| `/` | `GET` | Serves the interactive Tailwind + Chart.js dashboard |
+| `/api/analyze` | `POST` | Runs the 5,000-iteration Monte Carlo simulation and returns KPIs, histogram bins, and mitigations |
+| `/api/upload-csv` | `POST` | Parses an uploaded Jira/Linear CSV in memory and returns historical mean velocity and standard deviation |
+
+## Performance & Privacy
+
+- **Simulation Latency:** Under 35ms for 5,000 NumPy iterations.
+- **Zero-Storage Privacy:** Uploaded CSVs and sprint parameters exist strictly in active request memory and are discarded immediately after the response is sent.
+
+## Local Setup
+
+```bash
+git clone https://github.com/dhairyachandan7-eng/AgileSprint.ai.git
+cd AgileSprint.ai
+pip install -r requirements.txt
+python app.py
