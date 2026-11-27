@@ -31,7 +31,22 @@
     <!-- Input Form -->
     <section class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
       <h2 class="text-base font-semibold text-white mb-1">Sprint Parameters</h2>
-      <p class="text-xs text-slate-400 mb-6">Inputs are processed in memory and discarded immediately after simulation.</p>
+      <p class="text-xs text-slate-400 mb-4">Inputs are processed in memory and discarded immediately after simulation.</p>
+
+      <!-- CSV Upload Box -->
+      <div class="mb-5 p-3.5 rounded-xl bg-slate-950/80 border border-dashed border-slate-700">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-semibold text-indigo-400">Import Jira / Linear Sprint CSV</span>
+          <button type="button" id="downloadSampleBtn" class="text-[11px] text-slate-400 hover:text-white underline">
+            Download Sample CSV
+          </button>
+        </div>
+        <input type="file" id="csvFileInput" accept=".csv"
+          class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600/20 file:text-indigo-300 hover:file:bg-indigo-600/30 cursor-pointer" />
+        <p id="csvStatus" class="text-[11px] text-slate-500 mt-1.5">
+          Auto-calculates mean velocity &amp; std dev from historical sprints.
+        </p>
+      </div>
 
       <form id="sprintForm" class="space-y-4">
         <div class="grid grid-cols-2 gap-4">
@@ -136,6 +151,56 @@
 
   <script>
     let chartInstance = null;
+
+    // Sample CSV download for instant testing
+    document.getElementById("downloadSampleBtn").addEventListener("click", () => {
+      const sampleCsv = [
+        "Sprint Name,Committed Points,Completed Points",
+        "Sprint 18,40,36",
+        "Sprint 19,42,41",
+        "Sprint 20,38,35",
+        "Sprint 21,45,42",
+        "Sprint 22,40,39",
+        "Sprint 23,44,37"
+      ].join("\n");
+      const blob = new Blob([sampleCsv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "jira_sprint_history_sample.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // CSV upload handler
+    document.getElementById("csvFileInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById("csvStatus");
+      statusEl.textContent = "Parsing sprint history in memory...";
+      statusEl.className = "text-[11px] text-indigo-300 mt-1.5";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload-csv", {
+        method: "POST",
+        body: formData
+      });
+      const json = await res.json();
+
+      if (json.status === "success") {
+        document.getElementById("historical_velocity").value = json.data.historical_velocity;
+        document.getElementById("velocity_std_dev").value = json.data.velocity_std_dev;
+        statusEl.textContent = `Loaded ${json.data.sprints_analyzed} sprints (${json.data.column_used}): Avg ${json.data.historical_velocity} pts, Std Dev ±${json.data.velocity_std_dev}.`;
+        statusEl.className = "text-[11px] text-emerald-400 mt-1.5";
+        runSimulation();
+      } else {
+        statusEl.textContent = json.message;
+        statusEl.className = "text-[11px] text-rose-400 mt-1.5";
+      }
+    });
 
     async function runSimulation(event) {
       if (event) event.preventDefault();
