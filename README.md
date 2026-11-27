@@ -42,6 +42,7 @@ simulated_outputs = np.clip(
     0, None
 )
 completion_probability = (np.sum(simulated_outputs >= committed_points) / 5000) * 100
+```
 
 ## Practical Use Cases
 
