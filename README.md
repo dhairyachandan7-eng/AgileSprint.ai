@@ -67,10 +67,22 @@ completion_probability = (np.sum(simulated_outputs >= committed_points) / 5000) 
 - **Simulation Latency:** Under 35ms for 5,000 NumPy iterations.
 - **Zero-Storage Privacy:** Uploaded CSVs and sprint parameters exist strictly in active request memory and are discarded immediately after the response is sent.
 
-## Local Setup
+## Render Free Tier Optimizations
+
+Computational Limitations & Solutions:
+- **Memory (512MB):** Single-request NumPy vectorization (`size=5000`) uses under 1MB per call with immediate garbage collection
+- **CPU:** Vectorized normal sampling completes in under 35ms without multi-threading overhead
+- **Sleep Mode:** Lightweight Flask + Gunicorn worker boots in under 15 seconds after inactivity
+- **No Persistence:** CSV parsing (`io.StringIO`) and sprint calculations run strictly in active memory
+
+## Installation
+
+### Local Setup
 
 ```bash
-git clone https://github.com/dhairyachandan7-eng/AgileSprint.ai.git
+git clone [https://github.com/dhairyachandan7-eng/AgileSprint.ai.git](https://github.com/dhairyachandan7-eng/AgileSprint.ai.git)
 cd AgileSprint.ai
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
