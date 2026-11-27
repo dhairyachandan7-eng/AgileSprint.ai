@@ -1,8 +1,72 @@
+import csv
+import io
 import os
 import numpy as np
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
+
+
+def parse_sprint_csv(file_stream) -> dict:
+    """
+    Parses a Jira/Linear/custom sprint CSV in memory to extract historical
+    velocity mean and standard deviation without storing user data.
+    """
+    raw_text = file_stream.read().decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(raw_text))
+
+    if not reader.fieldnames:
+        raise ValueError("CSV file appears empty or missing header columns.")
+
+    # Match common Jira, Linear, or custom velocity column names
+    target_keywords = [
+        "completed",
+        "velocity",
+        "delivered",
+        "story points",
+        "story_points",
+        "points",
+    ]
+    matched_col = None
+    for col in reader.fieldnames:
+        col_lower = col.strip().lower()
+        if any(key in col_lower for key in target_keywords):
+            matched_col = col
+            break
+
+    if not matched_col:
+        raise ValueError(
+            "Could not find a points column. Include a header like 'Completed Points' or 'Velocity'."
+        )
+
+    velocities = []
+    for row in reader:
+        val = row.get(matched_col, "").strip()
+        if not val:
+            continue
+        try:
+            num = float(val)
+            if num >= 0:
+                velocities.append(num)
+        except ValueError:
+            continue
+
+    if len(velocities) < 2:
+        raise ValueError(
+            "CSV must contain at least 2 sprints with numeric story points to calculate variance."
+        )
+
+    arr = np.array(velocities, dtype=float)
+    mean_vel = round(float(np.mean(arr)), 1)
+    std_vel = round(max(0.5, float(np.std(arr, ddof=1))), 1)
+
+    return {
+        "sprints_analyzed": len(velocities),
+        "column_used": matched_col,
+        "historical_velocity": mean_vel,
+        "velocity_std_dev": std_vel,
+        "recent_velocities": velocities[-6:],
+    }
 
 
 def run_sprint_simulation(
@@ -21,14 +85,12 @@ def run_sprint_simulation(
     """
     rng = np.random.default_rng()
 
-    # Adjust baseline velocity based on dependency drag and carryover overhead
-    dependency_penalty = dependencies * 0.035  # 3.5% efficiency drag per external dependency
+    dependency_penalty = dependencies * 0.035
     carryover_drag = (carryover_points / max(committed_points, 1)) * 0.15
     effective_mean_velocity = historical_velocity * max(
         0.5, 1.0 - dependency_penalty - carryover_drag
     )
 
-    # Simulate sprint delivery across N iterations
     simulated_outputs = rng.normal(
         loc=effective_mean_velocity,
         scale=max(velocity_std_dev, 1.0),
@@ -36,16 +98,13 @@ def run_sprint_simulation(
     )
     simulated_outputs = np.clip(simulated_outputs, 0, None)
 
-    # Calculate probability of completing committed scope
     success_count = np.sum(simulated_outputs >= committed_points)
     completion_probability = round(float((success_count / simulations) * 100), 1)
 
-    # Percentiles for forecasting
-    p10 = round(float(np.percentile(simulated_outputs, 10)), 1)  # Pessimistic (90% confidence)
-    p50 = round(float(np.percentile(simulated_outputs, 50)), 1)  # Most Likely
-    p90 = round(float(np.percentile(simulated_outputs, 90)), 1)  # Optimistic
+    p10 = round(float(np.percentile(simulated_outputs, 10)), 1)
+    p50 = round(float(np.percentile(simulated_outputs, 50)), 1)
+    p90 = round(float(np.percentile(simulated_outputs, 90)), 1)
 
-    # Compute Risk Score (0 to 100, higher = riskier)
     scope_ratio = committed_points / max(historical_velocity, 1.0)
     points_per_dev_day = committed_points / max(team_size * sprint_days, 1)
 
@@ -63,7 +122,6 @@ def run_sprint_simulation(
     else:
         risk_level = "Healthy"
 
-    # Diagnose specific bottlenecks
     bottlenecks = []
     mitigations = []
 
@@ -107,7 +165,6 @@ def run_sprint_simulation(
             "Maintain daily standup pacing and track burndown variance at the sprint midpoint."
         )
 
-    # Histogram buckets for frontend chart
     counts, bin_edges = np.histogram(simulated_outputs, bins=10)
     histogram = [
         {
@@ -132,6 +189,20 @@ def run_sprint_simulation(
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/upload-csv", methods=["POST"])
+def upload_csv():
+    if "file" not in request.files:
+        return jsonify({"status": "error", "message": "No CSV file uploaded."}), 400
+    uploaded_file = request.files["file"]
+    if not uploaded_file.filename:
+        return jsonify({"status": "error", "message": "Empty filename."}), 400
+    try:
+        stats = parse_sprint_csv(uploaded_file.stream)
+        return jsonify({"status": "success", "data": stats})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
 
 @app.route("/api/analyze", methods=["POST"])
