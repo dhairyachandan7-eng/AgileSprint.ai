@@ -1,4 +1,4 @@
-# AgileSprint.ai — Stateless Monte Carlo Sprint Risk & Velocity Predictor
+# AgileSprint.ai — Monte Carlo Sprint Risk & Velocity Predictor
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-3.0-green?logo=flask&logoColor=white)
@@ -6,34 +6,39 @@
 ![Chart.js](https://img.shields.io/badge/Chart.js-4.4-FF6384?logo=chartdotjs&logoColor=white)
 ![Deployed on Render](https://img.shields.io/badge/Deployed%20on-Render-46E3B7?logo=render&logoColor=white)
 
-**Live Demo:** [https://agilesprint-ai.onrender.com/](https://agilesprint-ai.onrender.com/)
+**Live Demo:** https://agilesprint-ai.onrender.com/
+
+AgileSprint.ai is a sprint forecasting and risk diagnostics tool built for Agile project managers, scrum masters, and product operations leads. Instead of relying on static historical averages during sprint planning, it runs a 5,000-iteration Monte Carlo simulation in NumPy to model velocity variance, external dependency drag, and carryover debt—giving teams realistic P10, P50, and P90 delivery confidence intervals before they commit to a backlog.
 
 ![AgileSprint.ai Dashboard](screenshots/dashboard.png)
 
-AgileSprint.ai is a lightweight, zero-storage project operations tool that forecasts Agile sprint completion probabilities, detects delivery bottlenecks, and generates mitigation plans using a 5,000-iteration Monte Carlo simulation engine.
+## Features
 
----
+### Monte Carlo Delivery Forecasting
+- Runs 5,000 randomized sprint trials per request using NumPy normal distributions bounded at zero.
+- Calculates exact completion probability (`%` of simulated sprints meeting or exceeding committed story points).
+- Outputs **P10 (Conservative)**, **P50 (Median)**, and **P90 (Optimistic)** throughput benchmarks.
 
-## Core Capabilities
+### Jira & Linear CSV Auto-Import
+- Parses exported sprint CSV files directly in server memory via Python's `csv` and `io.StringIO` modules.
+- Automatically detects points columns (`Completed Points`, `Velocity`, `Story Points`) and computes sample mean and sample standard deviation (`ddof=1`).
 
-* **Monte Carlo Delivery Forecasting:** Models velocity variance, external dependency drag, and carryover debt across 5,000 simulated sprints to calculate P10, P50, and P90 delivery confidence intervals.
-* **Automated Bottleneck Diagnostics:** Evaluates scope-to-velocity ratios, dependency density, and per-contributor daily point saturation to pinpoint delivery risks before sprint kickoff.
-* **Stateless Privacy Architecture:** All sprint metrics are processed strictly in active server memory and discarded immediately after rendering—zero databases, zero cookies, and zero retention of proprietary team metrics.
+### Rule-Based Bottleneck Diagnostics
+- Flags **Scope Over-Commitment** when committed points exceed historical velocity by more than 10%.
+- Flags **Dependency Drag** when 3 or more external team dependencies threaten sprint flow.
+- Flags **Carryover Debt** and **Contributor Saturation** when points per contributor-day exceed `1.2`.
 
----
+## Core Formulas & Simulation Logic
 
-## System Architecture
+```python
+# Adjusted Effective Velocity accounting for dependency drag and carryover debt
+dependency_penalty = dependencies * 0.035
+carryover_drag = (carryover_points / max(committed_points, 1)) * 0.15
+effective_mean_velocity = historical_velocity * max(0.5, 1.0 - dependency_penalty - carryover_drag)
 
-```text
-[User Browser / Tailwind UI]
-        │
-        ▼  POST /api/analyze (JSON Sprint Parameters)
-[Flask Application Server]
-        │
-        ▼  In-Memory Vectorized Simulation (NumPy)
-[Monte Carlo & Risk Heuristic Engine]
-        │  ├── Dependency & Carryover Efficiency Adjustment
-        │  ├── 5,000-Run Normal Distribution Sampling
-        │  └── Rule-Based Bottleneck & Mitigation Generator
-        ▼  JSON Response (Forecasts, Histogram, Action Items)
-[Chart.js Interactive Visualization]
+# 5,000-Iteration Monte Carlo Sampling
+simulated_outputs = np.clip(
+    rng.normal(loc=effective_mean_velocity, scale=max(velocity_std_dev, 1.0), size=5000),
+    0, None
+)
+completion_probability = (np.sum(simulated_outputs >= committed_points) / 5000) * 100
