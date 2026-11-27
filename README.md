@@ -1,5 +1,11 @@
 # AgileSprint.ai — Stateless Monte Carlo Sprint Risk & Velocity Predictor
 
+![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-3.0-green?logo=flask&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-1.26-013243?logo=numpy&logoColor=white)
+![Chart.js](https://img.shields.io/badge/Chart.js-4.4-FF6384?logo=chartdotjs&logoColor=white)
+![Deployed on Render](https://img.shields.io/badge/Deployed%20on-Render-46E3B7?logo=render&logoColor=white)
+
 **Live Demo:** [https://agilesprint-ai.onrender.com/](https://agilesprint-ai.onrender.com/)
 
 ![AgileSprint.ai Dashboard](screenshots/dashboard.png)
