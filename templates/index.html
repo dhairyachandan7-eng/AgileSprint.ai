@@ -6,144 +6,144 @@
   <title>AgileSprint.ai | Monte Carlo Sprint Risk & Velocity Predictor</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
   <!-- Header -->
-  <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur sticky top-0 z-10">
-    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+  <header class="border-b border-slate-800 bg-slate-900/75 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
           AS
         </div>
         <div>
           <h1 class="text-lg font-bold tracking-tight text-white">AgileSprint<span class="text-indigo-400">.ai</span></h1>
-          <p class="text-xs text-slate-400">Stateless Monte Carlo Sprint Risk &amp; Velocity Predictor</p>
+          <p class="text-xs text-slate-400">Monte Carlo Sprint Risk &amp; Velocity Predictor</p>
         </div>
       </div>
-      <span class="text-xs px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        Zero-Storage Privacy Mode
+      <span class="text-xs px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+        5,000-Trial In-Memory Simulation
       </span>
     </div>
   </header>
 
-  <!-- Main Content -->
-  <main class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-    <!-- Input Form -->
-    <section class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+  <!-- Main Workspace -->
+  <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <!-- Left Input Panel -->
+    <section class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl h-fit">
       <h2 class="text-base font-semibold text-white mb-1">Sprint Parameters</h2>
-      <p class="text-xs text-slate-400 mb-4">Inputs are processed in memory and discarded immediately after simulation.</p>
+      <p class="text-xs text-slate-400 mb-4">Configure sprint backlog &amp; team capacity to simulate 5,000 outcomes.</p>
 
-      <!-- CSV Upload Box -->
-      <div class="mb-5 p-3.5 rounded-xl bg-slate-950/80 border border-dashed border-slate-700">
-        <div class="flex items-center justify-between mb-1.5">
-          <span class="text-xs font-semibold text-indigo-400">Import Jira / Linear Sprint CSV</span>
-          <button type="button" id="downloadSampleBtn" class="text-[11px] text-slate-400 hover:text-white underline">
-            Download Sample CSV
-          </button>
+      <!-- CSV Import Box -->
+      <div class="mb-5 p-3.5 rounded-xl bg-slate-950 border border-dashed border-slate-700">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-medium text-slate-300">Auto-Import Jira / Linear CSV</span>
+          <a href="/sample-csv" class="text-xs text-indigo-400 hover:text-indigo-300 underline">Download Sample CSV</a>
         </div>
         <input type="file" id="csvFileInput" accept=".csv"
-          class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600/20 file:text-indigo-300 hover:file:bg-indigo-600/30 cursor-pointer" />
-        <p id="csvStatus" class="text-[11px] text-slate-500 mt-1.5">
-          Auto-calculates mean velocity &amp; std dev from historical sprints.
-        </p>
+          class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
+        <p id="csvStatus" class="text-[11px] text-emerald-400 mt-2 hidden"></p>
       </div>
 
       <form id="sprintForm" class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Committed Story Points (Planned)</label>
+          <input type="number" id="committed_points" value="44" min="1" step="1" required
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Committed Points</label>
-            <input type="number" id="committed_points" value="44" min="1" step="1" required
+            <label class="block text-xs font-medium text-slate-300 mb-1">Avg Completed Velocity</label>
+            <input type="number" id="historical_velocity" value="38" min="1" step="0.1" required
               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Avg Historical Velocity</label>
-            <input type="number" id="historical_velocity" value="38" min="1" step="0.5" required
+            <label class="block text-xs font-medium text-slate-300 mb-1">Velocity Std Dev (±)</label>
+            <input type="number" id="velocity_std_dev" value="5" min="0.5" step="0.1" required
               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Velocity Std Dev (± pts)</label>
-            <input type="number" id="velocity_std_dev" value="5" min="0.5" step="0.5" required
-              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Carryover Points</label>
-            <input type="number" id="carryover_points" value="6" min="0" step="1" required
-              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-3">
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Team Size</label>
-            <input type="number" id="team_size" value="5" min="1" max="50" required
-              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Sprint Days</label>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Sprint Duration (Days)</label>
             <input type="number" id="sprint_days" value="10" min="1" max="30" required
               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Dependencies</label>
-            <input type="number" id="dependencies" value="3" min="0" max="25" required
+            <label class="block text-xs font-medium text-slate-300 mb-1">Active Contributors</label>
+            <input type="number" id="team_size" value="5" min="1" max="50" required
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">External Dependencies</label>
+            <input type="number" id="dependencies" value="3" min="0" max="20" required
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Carryover Debt (Pts)</label>
+            <input type="number" id="carryover_points" value="6" min="0" step="1" required
               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
           </div>
         </div>
 
         <button type="submit"
           class="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition shadow-lg shadow-indigo-600/20">
-          Run 5,000-Iteration Simulation
+          Run 5,000-Trial Simulation
         </button>
       </form>
     </section>
 
-    <!-- Results Dashboard -->
-    <section class="lg:col-span-7 space-y-6">
+    <!-- Right Analytics & Charts -->
+    <section class="lg:col-span-8 space-y-6">
       <!-- Top KPI Cards -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <p class="text-xs text-slate-400">Completion Probability</p>
-          <p id="kpiProbability" class="text-3xl font-bold text-indigo-400 mt-1">--%</p>
-          <p class="text-xs text-slate-500 mt-1">Chance of hitting full scope</p>
+          <p id="kpiProb" class="text-3xl font-bold text-indigo-400 mt-1">--%</p>
+          <p id="kpiTargetNote" class="text-xs text-slate-500 mt-1">Odds of hitting committed scope</p>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <p class="text-xs text-slate-400">Sprint Risk Score</p>
           <div class="flex items-baseline gap-2 mt-1">
-            <p id="kpiRiskScore" class="text-3xl font-bold text-white">--</p>
-            <span id="kpiRiskBadge" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">--</span>
+            <p id="kpiRisk" class="text-3xl font-bold text-rose-400">--</p>
+            <span id="kpiRiskBadge" class="text-xs font-semibold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400">--</span>
           </div>
-          <p class="text-xs text-slate-500 mt-1">0 (Safe) to 100 (Critical)</p>
+          <p class="text-xs text-slate-500 mt-1">Weighted failure &amp; dependency index</p>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <p class="text-xs text-slate-400">Adjusted Effective Velocity</p>
-          <p id="kpiVelocity" class="text-3xl font-bold text-emerald-400 mt-1">--</p>
-          <p id="kpiForecast" class="text-xs text-slate-500 mt-1">P10 / P50 / P90: --</p>
+          <p id="kpiEffVel" class="text-3xl font-bold text-emerald-400 mt-1">-- pts</p>
+          <p id="kpiPercentiles" class="text-[11px] text-slate-400 mt-1 whitespace-nowrap">P10: -- | P50: -- | P90: --</p>
         </div>
       </div>
 
-      <!-- Distribution Chart -->
+      <!-- Monte Carlo Histogram -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold text-white">Monte Carlo Velocity Distribution (5,000 Runs)</h3>
-          <span class="text-xs text-slate-400">Story Points Delivered</span>
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 class="text-sm font-semibold text-white">Monte Carlo Story Point Distribution (5,000 Simulated Sprints)</h3>
+            <p class="text-xs text-slate-400">Dashed line marks your Committed Story Points target</p>
+          </div>
         </div>
-        <div class="h-52">
-          <canvas id="velocityChart"></canvas>
+        <div class="h-64">
+          <canvas id="monteCarloChart"></canvas>
         </div>
       </div>
 
       <!-- Bottlenecks & Mitigations -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <h3 class="text-sm font-semibold text-amber-400 mb-3">Detected Bottlenecks</h3>
-          <ul id="bottleneckList" class="space-y-2 text-xs text-slate-300 leading-relaxed"></ul>
+          <h3 class="text-sm font-semibold text-rose-400 mb-3">Detected Sprint Bottlenecks</h3>
+          <ul id="bottleneckList" class="space-y-2.5 text-xs text-slate-300 leading-relaxed"></ul>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <h3 class="text-sm font-semibold text-emerald-400 mb-3">Recommended Mitigations</h3>
-          <ul id="mitigationList" class="space-y-2 text-xs text-slate-300 leading-relaxed"></ul>
+          <ul id="mitigationList" class="space-y-2.5 text-xs text-slate-300 leading-relaxed"></ul>
         </div>
       </div>
     </section>
@@ -152,53 +152,27 @@
   <script>
     let chartInstance = null;
 
-    // Sample CSV download for instant testing
-    document.getElementById("downloadSampleBtn").addEventListener("click", () => {
-      const sampleCsv = [
-        "Sprint Name,Committed Points,Completed Points",
-        "Sprint 18,40,36",
-        "Sprint 19,42,41",
-        "Sprint 20,38,35",
-        "Sprint 21,45,42",
-        "Sprint 22,40,39",
-        "Sprint 23,44,37"
-      ].join("\n");
-      const blob = new Blob([sampleCsv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "jira_sprint_history_sample.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    // CSV upload handler
     document.getElementById("csvFileInput").addEventListener("change", async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      const statusEl = document.getElementById("csvStatus");
-      statusEl.textContent = "Parsing sprint history in memory...";
-      statusEl.className = "text-[11px] text-indigo-300 mt-1.5";
-
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/upload-csv", {
-        method: "POST",
-        body: formData
-      });
+      const res = await fetch("/api/upload-csv", { method: "POST", body: formData });
       const json = await res.json();
+      const statusEl = document.getElementById("csvStatus");
+      statusEl.classList.remove("hidden");
 
       if (json.status === "success") {
-        document.getElementById("historical_velocity").value = json.data.historical_velocity;
-        document.getElementById("velocity_std_dev").value = json.data.velocity_std_dev;
-        statusEl.textContent = `Loaded ${json.data.sprints_analyzed} sprints (${json.data.column_used}): Avg ${json.data.historical_velocity} pts, Std Dev ±${json.data.velocity_std_dev}.`;
-        statusEl.className = "text-[11px] text-emerald-400 mt-1.5";
+        document.getElementById("historical_velocity").value = json.data.mean_velocity;
+        document.getElementById("velocity_std_dev").value = json.data.std_dev;
+        statusEl.className = "text-[11px] text-emerald-400 mt-2";
+        statusEl.textContent = `Loaded ${json.data.sprints_analyzed} sprints (${json.data.column_used}) -> Avg Completed Speed: ${json.data.mean_velocity} pts (±${json.data.std_dev})`;
         runSimulation();
       } else {
+        statusEl.className = "text-[11px] text-rose-400 mt-2";
         statusEl.textContent = json.message;
-        statusEl.className = "text-[11px] text-rose-400 mt-1.5";
       }
     });
 
@@ -209,10 +183,10 @@
         committed_points: document.getElementById("committed_points").value,
         historical_velocity: document.getElementById("historical_velocity").value,
         velocity_std_dev: document.getElementById("velocity_std_dev").value,
-        carryover_points: document.getElementById("carryover_points").value,
-        team_size: document.getElementById("team_size").value,
         sprint_days: document.getElementById("sprint_days").value,
+        team_size: document.getElementById("team_size").value,
         dependencies: document.getElementById("dependencies").value,
+        carryover_points: document.getElementById("carryover_points").value,
       };
 
       const res = await fetch("/api/analyze", {
@@ -224,57 +198,98 @@
       const json = await res.json();
       if (json.status !== "success") return;
 
-      const d = json.data;
-      document.getElementById("kpiProbability").textContent = `${d.completion_probability}%`;
-      document.getElementById("kpiRiskScore").textContent = `${d.risk_score}/100`;
-      document.getElementById("kpiVelocity").textContent = `${d.effective_velocity} pts`;
-      document.getElementById("kpiForecast").textContent =
-        `P10: ${d.forecast.p10} | P50: ${d.forecast.p50} | P90: ${d.forecast.p90}`;
+      const { kpis, histogram, diagnostics } = json.data;
+      const committed = Number(kpis.committed_points);
 
-      const badge = document.getElementById("kpiRiskBadge");
-      badge.textContent = d.risk_level;
-      badge.className = "text-xs px-2 py-0.5 rounded-full font-medium " + (
-        d.risk_score >= 70
-          ? "bg-rose-500/20 text-rose-400"
-          : d.risk_score >= 40
-          ? "bg-amber-500/20 text-amber-400"
-          : "bg-emerald-500/20 text-emerald-400"
+      document.getElementById("kpiProb").textContent = `${kpis.completion_probability}%`;
+      document.getElementById("kpiTargetNote").textContent = `Odds of hitting ${committed} committed pts`;
+
+      const riskEl = document.getElementById("kpiRisk");
+      const badgeEl = document.getElementById("kpiRiskBadge");
+      riskEl.textContent = `${kpis.risk_score}/100`;
+      badgeEl.textContent = kpis.risk_label;
+
+      if (kpis.risk_score >= 70) {
+        riskEl.className = "text-3xl font-bold text-rose-400";
+        badgeEl.className = "text-xs font-semibold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400";
+      } else if (kpis.risk_score >= 40) {
+        riskEl.className = "text-3xl font-bold text-amber-400";
+        badgeEl.className = "text-xs font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400";
+      } else {
+        riskEl.className = "text-3xl font-bold text-emerald-400";
+        badgeEl.className = "text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400";
+      }
+
+      document.getElementById("kpiEffVel").textContent = `${kpis.effective_velocity} pts`;
+      document.getElementById("kpiPercentiles").textContent = `P10: ${kpis.p10} | P50: ${kpis.p50} | P90: ${kpis.p90}`;
+
+      document.getElementById("bottleneckList").innerHTML = diagnostics.bottlenecks
+        .map(b => `<li class="flex gap-2"><span class="text-rose-400">•</span><span>${b}</span></li>`)
+        .join("");
+
+      document.getElementById("mitigationList").innerHTML = diagnostics.mitigations
+        .map(m => `<li class="flex gap-2"><span class="text-emerald-400">•</span><span>${m}</span></li>`)
+        .join("");
+
+      // Find which histogram bin index corresponds to the committed points target
+      let targetBinIndex = histogram.midpoints.findIndex(mid => mid >= committed);
+      if (targetBinIndex === -1) targetBinIndex = histogram.labels.length - 1;
+
+      const barColors = histogram.midpoints.map(mid =>
+        mid >= committed ? "rgba(16, 185, 129, 0.75)" : "rgba(99, 102, 241, 0.65)"
       );
 
-      document.getElementById("bottleneckList").innerHTML = d.bottlenecks
-        .map(item => `<li class="flex gap-2"><span class="text-amber-400">•</span><span>${item}</span></li>`)
-        .join("");
-
-      document.getElementById("mitigationList").innerHTML = d.mitigations
-        .map(item => `<li class="flex gap-2"><span class="text-emerald-400">•</span><span>${item}</span></li>`)
-        .join("");
-
-      const labels = d.histogram.map(b => b.range);
-      const counts = d.histogram.map(b => b.count);
-
-      const ctx = document.getElementById("velocityChart").getContext("2d");
+      const ctx = document.getElementById("monteCarloChart").getContext("2d");
       if (chartInstance) chartInstance.destroy();
 
       chartInstance = new Chart(ctx, {
         type: "bar",
         data: {
-          labels,
+          labels: histogram.labels,
           datasets: [{
             label: "Simulated Sprints",
-            data: counts,
-            backgroundColor: "rgba(99, 102, 241, 0.7)",
-            borderColor: "rgba(129, 140, 248, 1)",
-            borderWidth: 1,
-            borderRadius: 6
+            data: histogram.counts,
+            backgroundColor: barColors,
+            borderRadius: 4,
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            annotation: {
+              annotations: {
+                committedLine: {
+                  type: "line",
+                  xMin: targetBinIndex,
+                  xMax: targetBinIndex,
+                  borderColor: "#f43f5e",
+                  borderWidth: 2,
+                  borderDash: [6, 4],
+                  label: {
+                    display: true,
+                    content: `Committed: ${committed} pts`,
+                    position: "start",
+                    backgroundColor: "rgba(244, 63, 94, 0.9)",
+                    color: "#fff",
+                    font: { size: 11, weight: "bold" }
+                  }
+                }
+              }
+            }
+          },
           scales: {
-            x: { ticks: { color: "#94a3b8", font: { size: 11 } }, grid: { display: false } },
-            y: { ticks: { color: "#94a3b8", font: { size: 11 } }, grid: { color: "rgba(51, 65, 85, 0.4)" } }
+            x: {
+              title: { display: true, text: "Story Points Completed", color: "#94a3b8", font: { size: 11 } },
+              ticks: { color: "#94a3b8", font: { size: 10 } },
+              grid: { display: false }
+            },
+            y: {
+              title: { display: true, text: "Frequency (Out of 5,000 Trials)", color: "#94a3b8", font: { size: 11 } },
+              ticks: { color: "#94a3b8", font: { size: 10 } },
+              grid: { color: "rgba(51, 65, 85, 0.4)" }
+            }
           }
         }
       });
