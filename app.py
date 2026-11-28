@@ -2,187 +2,124 @@ import csv
 import io
 import os
 import numpy as np
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 
 app = Flask(__name__)
 
 
-def parse_sprint_csv(file_stream) -> dict:
-    """
-    Parses a Jira/Linear/custom sprint CSV in memory to extract historical
-    velocity mean and standard deviation without storing user data.
-    """
-    raw_text = file_stream.read().decode("utf-8-sig", errors="replace")
-    reader = csv.DictReader(io.StringIO(raw_text))
-
-    if not reader.fieldnames:
-        raise ValueError("CSV file appears empty or missing header columns.")
-
-    # Match common Jira, Linear, or custom velocity column names
-    target_keywords = [
-        "completed",
-        "velocity",
-        "delivered",
-        "story points",
-        "story_points",
-        "points",
-    ]
-    matched_col = None
-    for col in reader.fieldnames:
-        col_lower = col.strip().lower()
-        if any(key in col_lower for key in target_keywords):
-            matched_col = col
-            break
-
-    if not matched_col:
-        raise ValueError(
-            "Could not find a points column. Include a header like 'Completed Points' or 'Velocity'."
-        )
-
-    velocities = []
-    for row in reader:
-        val = row.get(matched_col, "").strip()
-        if not val:
-            continue
-        try:
-            num = float(val)
-            if num >= 0:
-                velocities.append(num)
-        except ValueError:
-            continue
-
-    if len(velocities) < 2:
-        raise ValueError(
-            "CSV must contain at least 2 sprints with numeric story points to calculate variance."
-        )
-
-    arr = np.array(velocities, dtype=float)
-    mean_vel = round(float(np.mean(arr)), 1)
-    std_vel = round(max(0.5, float(np.std(arr, ddof=1))), 1)
-
-    return {
-        "sprints_analyzed": len(velocities),
-        "column_used": matched_col,
-        "historical_velocity": mean_vel,
-        "velocity_std_dev": std_vel,
-        "recent_velocities": velocities[-6:],
-    }
-
-
-def run_sprint_simulation(
+def run_monte_carlo(
     committed_points: float,
     historical_velocity: float,
     velocity_std_dev: float,
+    sprint_days: int,
     team_size: int,
     dependencies: int,
     carryover_points: float,
-    sprint_days: int,
-    simulations: int = 5000,
+    iterations: int = 5000,
 ) -> dict:
-    """
-    Runs a stateless Monte Carlo simulation to predict sprint completion
-    probability, bottleneck risks, and actionable mitigation steps.
-    """
     rng = np.random.default_rng()
 
+    # Apply penalty factors for cross-team dependencies and carryover debt
     dependency_penalty = dependencies * 0.035
-    carryover_drag = (carryover_points / max(committed_points, 1)) * 0.15
-    effective_mean_velocity = historical_velocity * max(
-        0.5, 1.0 - dependency_penalty - carryover_drag
+    carryover_drag = (carryover_points / max(committed_points, 1.0)) * 0.15
+    effective_mean = historical_velocity * max(0.5, 1.0 - dependency_penalty - carryover_drag)
+
+    # Sample 5,000 sprint outcomes
+    simulated_points = np.clip(
+        rng.normal(loc=effective_mean, scale=max(velocity_std_dev, 1.0), size=iterations),
+        0,
+        None,
     )
 
-    simulated_outputs = rng.normal(
-        loc=effective_mean_velocity,
-        scale=max(velocity_std_dev, 1.0),
-        size=simulations,
+    completion_prob = float(np.mean(simulated_points >= committed_points) * 100)
+    p10, p50, p90 = np.percentile(simulated_points, [10, 50, 90])
+
+    # Align Sprint Risk Score directly with failure probability + operational drag
+    failure_prob = 100.0 - completion_prob
+    capacity_days = max(sprint_days * team_size, 1)
+    points_per_person_day = committed_points / capacity_days
+    overcommit_ratio = committed_points / max(effective_mean, 1.0)
+
+    raw_risk = (
+        (failure_prob * 0.65)
+        + min(dependencies * 4.5, 20.0)
+        + min(max(overcommit_ratio - 1.0, 0.0) * 35.0, 15.0)
     )
-    simulated_outputs = np.clip(simulated_outputs, 0, None)
-
-    success_count = np.sum(simulated_outputs >= committed_points)
-    completion_probability = round(float((success_count / simulations) * 100), 1)
-
-    p10 = round(float(np.percentile(simulated_outputs, 10)), 1)
-    p50 = round(float(np.percentile(simulated_outputs, 50)), 1)
-    p90 = round(float(np.percentile(simulated_outputs, 90)), 1)
-
-    scope_ratio = committed_points / max(historical_velocity, 1.0)
-    points_per_dev_day = committed_points / max(team_size * sprint_days, 1)
-
-    risk_score = 0
-    risk_score += min(45, max(0, (scope_ratio - 0.85) * 90))
-    risk_score += min(25, dependencies * 5)
-    risk_score += min(20, (carryover_points / max(committed_points, 1)) * 60)
-    risk_score += 10 if points_per_dev_day > 1.2 else 0
-    risk_score = round(min(100, max(5, risk_score)))
+    risk_score = int(np.clip(round(raw_risk), 5, 99))
 
     if risk_score >= 70:
-        risk_level = "High Risk"
+        risk_label = "High Risk"
     elif risk_score >= 40:
-        risk_level = "Moderate Risk"
+        risk_label = "Moderate Risk"
     else:
-        risk_level = "Healthy"
+        risk_label = "Low Risk"
 
+    # Build histogram bins
+    counts, bin_edges = np.histogram(simulated_points, bins=16)
+    labels = [f"{int(bin_edges[i])}-{int(bin_edges[i+1])}" for i in range(len(counts))]
+    bin_midpoints = [(bin_edges[i] + bin_edges[i + 1]) / 2.0 for i in range(len(counts))]
+
+    # Diagnostics & Mitigations
     bottlenecks = []
     mitigations = []
 
-    if scope_ratio > 1.1:
-        excess = round(committed_points - historical_velocity, 1)
+    if committed_points > effective_mean:
+        gap = round(committed_points - effective_mean, 1)
         bottlenecks.append(
-            f"Over-commitment: Scope exceeds historical average velocity by {excess} story points."
+            f"Scope Over-Commitment: Planned scope ({int(committed_points)} pts) exceeds adjusted effective velocity ({round(effective_mean, 1)} pts) by {gap} pts."
         )
         mitigations.append(
-            f"Move {excess} points of lowest-priority backlog items into a stretch goal bucket."
+            f"Defer {int(round(gap))} points of lower-priority stretch stories to bring scope in line with effective capacity (~{int(round(effective_mean))} pts)."
         )
 
     if dependencies >= 3:
         bottlenecks.append(
-            f"Dependency Drag: {dependencies} external dependencies create blocking risk."
+            f"External Dependency Drag: {dependencies} cross-team blockers reduce effective throughput by ~{round(dependency_penalty * 100, 1)}%."
         )
         mitigations.append(
-            "Schedule a mid-sprint cross-team sync and front-load dependent tickets in Days 1–3."
+            "Resolve or decouple external API/team blockers before sprint kickoff, or move dependent tickets to the next sprint."
         )
 
     if carryover_points > 0:
-        carryover_pct = round((carryover_points / max(committed_points, 1)) * 100, 1)
         bottlenecks.append(
-            f"Carryover Debt: {carryover_pct}% of sprint capacity is consumed by unfinished prior work."
+            f"Carryover Debt: {int(carryover_points)} unfinished points from the prior sprint absorb active development capacity."
         )
         mitigations.append(
-            "Audit carryover stories for hidden scope creep and break any story over 8 points into sub-tasks."
+            "Cap carryover intake and split stories larger than 8 points into smaller deliverable sub-tasks."
         )
 
-    if points_per_dev_day > 1.2:
+    if points_per_person_day > 1.2:
         bottlenecks.append(
-            f"Capacity Saturation: {round(points_per_dev_day, 2)} points per contributor-day exceeds sustainable thresholds."
+            f"Contributor Saturation: Workload averages {round(points_per_person_day, 2)} pts/person-day (above the 1.2 sustainable threshold)."
         )
         mitigations.append(
-            "Protect core engineering focus blocks and defer non-critical meetings until sprint review."
+            "Rebalance ticket assignments across team members or add a 15% buffer for code review and QA."
         )
 
     if not bottlenecks:
-        bottlenecks.append("No major structural bottlenecks detected in current sprint parameters.")
-        mitigations.append(
-            "Maintain daily standup pacing and track burndown variance at the sprint midpoint."
-        )
-
-    counts, bin_edges = np.histogram(simulated_outputs, bins=10)
-    histogram = [
-        {
-            "range": f"{round(float(bin_edges[i]))}-{round(float(bin_edges[i+1]))}",
-            "count": int(counts[i]),
-        }
-        for i in range(len(counts))
-    ]
+        bottlenecks.append("Balanced Sprint Load: Committed scope aligns well with adjusted historical capacity.")
+        mitigations.append("Maintain current WIP limits and track daily burndown against the P50 median pace.")
 
     return {
-        "completion_probability": completion_probability,
-        "risk_score": risk_score,
-        "risk_level": risk_level,
-        "forecast": {"p10": p10, "p50": p50, "p90": p90},
-        "effective_velocity": round(effective_mean_velocity, 1),
-        "bottlenecks": bottlenecks,
-        "mitigations": mitigations,
-        "histogram": histogram,
+        "kpis": {
+            "completion_probability": round(completion_prob, 1),
+            "risk_score": risk_score,
+            "risk_label": risk_label,
+            "effective_velocity": round(effective_mean, 1),
+            "p10": round(float(p10), 1),
+            "p50": round(float(p50), 1),
+            "p90": round(float(p90), 1),
+            "committed_points": committed_points,
+        },
+        "histogram": {
+            "labels": labels,
+            "counts": counts.tolist(),
+            "midpoints": bin_midpoints,
+        },
+        "diagnostics": {
+            "bottlenecks": bottlenecks,
+            "mitigations": mitigations,
+        },
     }
 
 
@@ -191,32 +128,77 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/sample-csv", methods=["GET"])
+def download_sample_csv():
+    sample_content = (
+        "Sprint,Completed Points,Carryover Points,Dependencies\n"
+        "Sprint 21,34,4,2\n"
+        "Sprint 22,38,2,1\n"
+        "Sprint 23,31,6,3\n"
+        "Sprint 24,36,3,2\n"
+        "Sprint 25,35,2,1\n"
+        "Sprint 26,33,5,2\n"
+    )
+    return Response(
+        sample_content,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=sample_jira_velocity.csv"},
+    )
+
+
 @app.route("/api/upload-csv", methods=["POST"])
 def upload_csv():
     if "file" not in request.files:
         return jsonify({"status": "error", "message": "No CSV file uploaded."}), 400
-    uploaded_file = request.files["file"]
-    if not uploaded_file.filename:
-        return jsonify({"status": "error", "message": "Empty filename."}), 400
+
+    file_storage = request.files["file"]
     try:
-        stats = parse_sprint_csv(uploaded_file.stream)
-        return jsonify({"status": "success", "data": stats})
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
+        raw_text = file_storage.read().decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(raw_text))
+        points_history = []
+        matched_column = "Completed Points"
+
+        for row in reader:
+            for col in ("Completed Points", "Delivered Points", "Velocity", "Story Points", "completed_points"):
+                if col in row and row[col] and row[col].strip():
+                    points_history.append(float(row[col].strip()))
+                    matched_column = col
+                    break
+
+        if not points_history:
+            return jsonify({
+                "status": "error",
+                "message": "Could not find a 'Completed Points' or 'Velocity' column in the CSV."
+            }), 400
+
+        mean_vel = float(np.mean(points_history))
+        std_vel = float(np.std(points_history, ddof=1)) if len(points_history) > 1 else round(mean_vel * 0.15, 2)
+
+        return jsonify({
+            "status": "success",
+            "data": {
+                "sprints_analyzed": len(points_history),
+                "column_used": matched_column,
+                "mean_velocity": round(mean_vel, 1),
+                "std_dev": round(std_vel, 2),
+            },
+        })
+    except Exception as exc:
+        return jsonify({"status": "error", "message": f"CSV parse error: {str(exc)}"}), 400
 
 
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
     data = request.get_json(force=True)
     try:
-        result = run_sprint_simulation(
-            committed_points=float(data.get("committed_points", 40)),
-            historical_velocity=float(data.get("historical_velocity", 36)),
+        result = run_monte_carlo(
+            committed_points=float(data.get("committed_points", 44)),
+            historical_velocity=float(data.get("historical_velocity", 38)),
             velocity_std_dev=float(data.get("velocity_std_dev", 5)),
-            team_size=int(data.get("team_size", 5)),
-            dependencies=int(data.get("dependencies", 2)),
-            carryover_points=float(data.get("carryover_points", 4)),
             sprint_days=int(data.get("sprint_days", 10)),
+            team_size=int(data.get("team_size", 5)),
+            dependencies=int(data.get("dependencies", 3)),
+            carryover_points=float(data.get("carryover_points", 6)),
         )
         return jsonify({"status": "success", "data": result})
     except (ValueError, TypeError) as exc:
